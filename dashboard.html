@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Dashboard Sistem Material PT Kinarya Utama Teknik">
+    <title>Dashboard – Sistem Material</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+    <div class="app-layout" id="app">
+        <div class="main-content">
+            <header class="top-header" id="topHeader"></header>
+            <div class="page-content" id="pageContent">
+                <!-- Stats -->
+                <div class="stats-grid" id="statsGrid"></div>
+
+                <!-- Two-column grid -->
+                <div class="grid-2" id="dashboardGrid">
+                    <!-- Stok Menipis -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>⚠️ Stok Menipis</h3>
+                        </div>
+                        <div class="card-body" style="padding:0;">
+                            <div class="table-wrapper">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Kode</th>
+                                            <th>Material</th>
+                                            <th>Stok</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tblStokRendah"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Permintaan Menunggu -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>⏳ Permintaan Menunggu ACC</h3>
+                        </div>
+                        <div class="card-body" style="padding:0;">
+                            <div class="table-wrapper">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Pemohon</th>
+                                            <th>Material</th>
+                                            <th>Jumlah</th>
+                                            <th>Tanggal</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tblMenunggu"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Transaksi Terbaru -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h3>🕐 Transaksi Terbaru</h3>
+                    </div>
+                    <div class="card-body" style="padding:0;">
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Tanggal</th>
+                                        <th>Jenis</th>
+                                        <th>Material</th>
+                                        <th>Jumlah</th>
+                                        <th>Oleh</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tblTerbaru"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="assets/js/data.js"></script>
+    <script src="assets/js/auth.js"></script>
+    <script src="assets/js/components.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!UI.init('dashboard')) return;
+            renderDashboard();
+        });
+
+        function renderDashboard() {
+            const user = Auth.getUser();
+            const role = user.role;
+
+            // ── Stats ──
+            const totalMaterial = MockDB.material.length;
+            const totalMasuk = MockDB.material_masuk.length;
+            const totalKeluar = MockDB.material_keluar.filter(k => k.status === 'Disetujui').length;
+            const totalMenunggu = MockDB.material_keluar.filter(k => k.status === 'Menunggu').length;
+            const stokRendahList = MockDB.material.filter(m => isStokRendah(m));
+
+            let statsHtml = '';
+
+            if (role === 'Kepala Operasional' || role === 'Admin') {
+                statsHtml += `
+                    <div class="stat-card blue">
+                        <div class="stat-icon">📋</div>
+                        <div class="stat-info">
+                            <h4>Jenis Material</h4>
+                            <div class="value">${totalMaterial}</div>
+                            <div class="change text-muted">Item terdaftar</div>
+                        </div>
+                    </div>
+                    <div class="stat-card green">
+                        <div class="stat-icon">📥</div>
+                        <div class="stat-info">
+                            <h4>Material Masuk</h4>
+                            <div class="value">${totalMasuk}</div>
+                            <div class="change text-muted">Total transaksi</div>
+                        </div>
+                    </div>
+                    <div class="stat-card orange">
+                        <div class="stat-icon">📤</div>
+                        <div class="stat-info">
+                            <h4>Material Keluar</h4>
+                            <div class="value">${totalKeluar}</div>
+                            <div class="change text-muted">Disetujui</div>
+                        </div>
+                    </div>
+                    <div class="stat-card red">
+                        <div class="stat-icon">⏳</div>
+                        <div class="stat-info">
+                            <h4>Menunggu ACC</h4>
+                            <div class="value">${totalMenunggu}</div>
+                            <div class="change text-muted">Permintaan pending</div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                // Tim Lapangan
+                const myRequests = MockDB.material_keluar.filter(k => k.id_pengguna === user.id_pengguna);
+                const myPending = myRequests.filter(k => k.status === 'Menunggu').length;
+                const myApproved = myRequests.filter(k => k.status === 'Disetujui').length;
+                const myRejected = myRequests.filter(k => k.status === 'Ditolak').length;
+
+                statsHtml += `
+                    <div class="stat-card blue">
+                        <div class="stat-icon">📋</div>
+                        <div class="stat-info">
+                            <h4>Total Permintaan Saya</h4>
+                            <div class="value">${myRequests.length}</div>
+                            <div class="change text-muted">Semua permintaan</div>
+                        </div>
+                    </div>
+                    <div class="stat-card orange">
+                        <div class="stat-icon">⏳</div>
+                        <div class="stat-info">
+                            <h4>Menunggu ACC</h4>
+                            <div class="value">${myPending}</div>
+                            <div class="change text-muted">Belum diproses</div>
+                        </div>
+                    </div>
+                    <div class="stat-card green">
+                        <div class="stat-icon">✅</div>
+                        <div class="stat-info">
+                            <h4>Disetujui</h4>
+                            <div class="value">${myApproved}</div>
+                            <div class="change text-muted">Permintaan diterima</div>
+                        </div>
+                    </div>
+                    <div class="stat-card red">
+                        <div class="stat-icon">❌</div>
+                        <div class="stat-info">
+                            <h4>Ditolak</h4>
+                            <div class="value">${myRejected}</div>
+                            <div class="change text-muted">Permintaan ditolak</div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            document.getElementById('statsGrid').innerHTML = statsHtml;
+
+            // ── Stok Menipis ──
+            let stokRendahHtml = '';
+            if (stokRendahList.length === 0) {
+                stokRendahHtml = `<tr><td colspan="3" class="text-center text-muted" style="padding:24px;">Semua stok dalam kondisi aman 👍</td></tr>`;
+            } else {
+                stokRendahList.forEach(m => {
+                    stokRendahHtml += `
+                        <tr>
+                            <td><span class="kode-material">${m.kode_material}</span></td>
+                            <td>${m.nama_material}</td>
+                            <td><span class="stok-rendah">${formatAngka(m.stok)} ${m.satuan} ⚠️</span></td>
+                        </tr>
+                    `;
+                });
+            }
+            document.getElementById('tblStokRendah').innerHTML = stokRendahHtml;
+
+            // ── Permintaan Menunggu ──
+            const menunggu = MockDB.material_keluar.filter(k => k.status === 'Menunggu');
+            let menungguHtml = '';
+            if (menunggu.length === 0) {
+                menungguHtml = `<tr><td colspan="4" class="text-center text-muted" style="padding:24px;">Tidak ada permintaan menunggu</td></tr>`;
+            } else {
+                menunggu.forEach(k => {
+                    const mat = getMaterialById(k.id_material);
+                    menungguHtml += `
+                        <tr>
+                            <td>${getNamaPengguna(k.id_pengguna)}</td>
+                            <td>${mat ? mat.nama_material : '-'}</td>
+                            <td>${formatAngka(k.jumlah)} ${mat ? mat.satuan : ''}</td>
+                            <td>${formatTanggal(k.tanggal)}</td>
+                        </tr>
+                    `;
+                });
+            }
+            document.getElementById('tblMenunggu').innerHTML = menungguHtml;
+
+            // ── Transaksi Terbaru ──
+            // Merge masuk + keluar, sort by date desc, take 10
+            let allTx = [];
+
+            MockDB.material_masuk.forEach(m => {
+                allTx.push({
+                    tanggal: m.tanggal,
+                    jenis: 'Masuk',
+                    id_material: m.id_material,
+                    jumlah: m.jumlah,
+                    oleh: getNamaPengguna(m.id_pengguna),
+                    status: '-',
+                    _sort: new Date(m.tanggal).getTime()
+                });
+            });
+
+            MockDB.material_keluar.forEach(k => {
+                allTx.push({
+                    tanggal: k.tanggal,
+                    jenis: 'Keluar',
+                    id_material: k.id_material,
+                    jumlah: k.jumlah,
+                    oleh: k.nama_pengambil,
+                    status: k.status,
+                    _sort: new Date(k.tanggal).getTime()
+                });
+            });
+
+            allTx.sort((a, b) => b._sort - a._sort);
+            const recent = allTx.slice(0, 10);
+
+            let terbaruHtml = '';
+            recent.forEach(tx => {
+                const mat = getMaterialById(tx.id_material);
+                const jenisClass = tx.jenis === 'Masuk' ? 'disetujui' : 'menunggu';
+                const statusHtml = tx.jenis === 'Masuk'
+                    ? '<span class="badge-status disetujui">Tercatat</span>'
+                    : UI.renderStatusBadge(tx.status);
+
+                terbaruHtml += `
+                    <tr>
+                        <td>${formatTanggal(tx.tanggal)}</td>
+                        <td><span class="badge-status ${jenisClass}">${tx.jenis === 'Masuk' ? '📥 Masuk' : '📤 Keluar'}</span></td>
+                        <td>${mat ? mat.nama_material : '-'}</td>
+                        <td>${formatAngka(tx.jumlah)} ${mat ? mat.satuan : ''}</td>
+                        <td>${tx.oleh}</td>
+                        <td>${statusHtml}</td>
+                    </tr>
+                `;
+            });
+
+            document.getElementById('tblTerbaru').innerHTML = terbaruHtml;
+
+            // Hide admin sections for Tim Lapangan
+            if (role === 'Tim Lapangan') {
+                document.getElementById('dashboardGrid').style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>

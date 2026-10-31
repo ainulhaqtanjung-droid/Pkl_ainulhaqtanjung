@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Riwayat Material – Sistem Material PT Kinarya Utama Teknik">
+    <title>Riwayat Material – Sistem Material</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+    <div class="app-layout" id="app">
+        <div class="main-content">
+            <header class="top-header" id="topHeader"></header>
+            <div class="page-content">
+
+                <!-- Filters -->
+                <div class="filters-bar no-print">
+                    <div class="form-group">
+                        <label>Jenis Transaksi</label>
+                        <select class="form-control" id="filterJenis" onchange="renderRiwayat()">
+                            <option value="">Semua</option>
+                            <option value="masuk">Material Masuk</option>
+                            <option value="keluar">Material Keluar</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Material</label>
+                        <select class="form-control" id="filterMaterial" onchange="renderRiwayat()">
+                            <option value="">Semua Material</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Dari Tanggal</label>
+                        <input type="date" class="form-control" id="filterDari" onchange="renderRiwayat()">
+                    </div>
+                    <div class="form-group">
+                        <label>Sampai Tanggal</label>
+                        <input type="date" class="form-control" id="filterSampai" onchange="renderRiwayat()">
+                    </div>
+                    <div class="form-group" style="align-self:flex-end;">
+                        <button class="btn btn-outline" onclick="resetFilter()">↺ Reset Filter</button>
+                    </div>
+                </div>
+
+                <!-- Summary -->
+                <div class="stats-grid" id="summaryStats"></div>
+
+                <!-- Table -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3>📜 Riwayat Transaksi Material</h3>
+                        <span class="text-sm text-muted" id="countInfo"></span>
+                    </div>
+                    <div class="card-body" style="padding:0;">
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>No</th>
+                                        <th>Tanggal</th>
+                                        <th>Jenis</th>
+                                        <th>Kode</th>
+                                        <th>Material</th>
+                                        <th>Jumlah</th>
+                                        <th>Detail</th>
+                                        <th>Oleh</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tblRiwayat"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="assets/js/data.js"></script>
+    <script src="assets/js/auth.js"></script>
+    <script src="assets/js/components.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!Auth.requireRole(['Kepala Operasional', 'Admin'])) return;
+            if (!UI.init('riwayat')) return;
+
+            // Populate material filter
+            document.getElementById('filterMaterial').innerHTML =
+                '<option value="">Semua Material</option>' +
+                MockDB.material.map(m => `<option value="${m.id_material}">${m.kode_material} – ${m.nama_material}</option>`).join('');
+
+            renderRiwayat();
+        });
+
+        function resetFilter() {
+            document.getElementById('filterJenis').value = '';
+            document.getElementById('filterMaterial').value = '';
+            document.getElementById('filterDari').value = '';
+            document.getElementById('filterSampai').value = '';
+            renderRiwayat();
+        }
+
+        function renderRiwayat() {
+            const fJenis = document.getElementById('filterJenis').value;
+            const fMaterial = document.getElementById('filterMaterial').value;
+            const fDari = document.getElementById('filterDari').value;
+            const fSampai = document.getElementById('filterSampai').value;
+
+            // Build combined list
+            let allTx = [];
+
+            if (fJenis !== 'keluar') {
+                MockDB.material_masuk.forEach(m => {
+                    allTx.push({
+                        tanggal: m.tanggal,
+                        jenis: 'Masuk',
+                        id_material: m.id_material,
+                        jumlah: m.jumlah,
+                        detail: m.keterangan || '-',
+                        oleh: getNamaPengguna(m.id_pengguna),
+                        status: 'Tercatat',
+                        _sort: new Date(m.tanggal).getTime() + m.id_masuk
+                    });
+                });
+            }
+
+            if (fJenis !== 'masuk') {
+                MockDB.material_keluar.forEach(k => {
+                    allTx.push({
+                        tanggal: k.tanggal,
+                        jenis: 'Keluar',
+                        id_material: k.id_material,
+                        jumlah: k.jumlah,
+                        detail: k.keperluan + ' (Pengambil: ' + k.nama_pengambil + ')',
+                        oleh: getNamaPengguna(k.id_pengguna),
+                        status: k.status,
+                        _sort: new Date(k.tanggal).getTime() + k.id_keluar
+                    });
+                });
+            }
+
+            // Apply filters
+            if (fMaterial) {
+                allTx = allTx.filter(t => t.id_material === parseInt(fMaterial));
+            }
+            if (fDari) {
+                allTx = allTx.filter(t => t.tanggal >= fDari);
+            }
+            if (fSampai) {
+                allTx = allTx.filter(t => t.tanggal <= fSampai);
+            }
+
+            // Sort desc
+            allTx.sort((a, b) => b._sort - a._sort);
+
+            // Summary stats
+            const totalMasuk = allTx.filter(t => t.jenis === 'Masuk').reduce((s, t) => s + t.jumlah, 0);
+            const totalKeluar = allTx.filter(t => t.jenis === 'Keluar' && t.status === 'Disetujui').reduce((s, t) => s + t.jumlah, 0);
+
+            document.getElementById('summaryStats').innerHTML = `
+                <div class="stat-card green">
+                    <div class="stat-icon">📥</div>
+                    <div class="stat-info">
+                        <h4>Total Masuk</h4>
+                        <div class="value">${formatAngka(totalMasuk)}</div>
+                        <div class="change text-muted">${allTx.filter(t => t.jenis === 'Masuk').length} transaksi</div>
+                    </div>
+                </div>
+                <div class="stat-card orange">
+                    <div class="stat-icon">📤</div>
+                    <div class="stat-info">
+                        <h4>Total Keluar</h4>
+                        <div class="value">${formatAngka(totalKeluar)}</div>
+                        <div class="change text-muted">${allTx.filter(t => t.jenis === 'Keluar' && t.status === 'Disetujui').length} transaksi disetujui</div>
+                    </div>
+                </div>
+                <div class="stat-card blue">
+                    <div class="stat-icon">📊</div>
+                    <div class="stat-info">
+                        <h4>Total Transaksi</h4>
+                        <div class="value">${formatAngka(allTx.length)}</div>
+                        <div class="change text-muted">Semua jenis</div>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('countInfo').textContent = `${allTx.length} transaksi`;
+
+            // Render table
+            let html = '';
+            if (allTx.length === 0) {
+                html = `<tr><td colspan="9" class="text-center text-muted" style="padding:32px;">Tidak ada riwayat ditemukan dengan filter ini</td></tr>`;
+            } else {
+                allTx.forEach((tx, i) => {
+                    const mat = getMaterialById(tx.id_material);
+                    const jenisClass = tx.jenis === 'Masuk' ? 'disetujui' : 'menunggu';
+                    const statusHtml = tx.jenis === 'Masuk'
+                        ? '<span class="badge-status disetujui">✓ Tercatat</span>'
+                        : UI.renderStatusBadge(tx.status);
+
+                    html += `
+                        <tr>
+                            <td>${i + 1}</td>
+                            <td>${formatTanggal(tx.tanggal)}</td>
+                            <td><span class="badge-status ${jenisClass}">${tx.jenis === 'Masuk' ? '📥 Masuk' : '📤 Keluar'}</span></td>
+                            <td><span class="kode-material">${mat ? mat.kode_material : '-'}</span></td>
+                            <td>${mat ? mat.nama_material : '-'}</td>
+                            <td><strong>${formatAngka(tx.jumlah)}</strong> ${mat ? mat.satuan : ''}</td>
+                            <td class="text-sm">${tx.detail}</td>
+                            <td>${tx.oleh}</td>
+                            <td>${statusHtml}</td>
+                        </tr>
+                    `;
+                });
+            }
+
+            document.getElementById('tblRiwayat').innerHTML = html;
+        }
+    </script>
+</body>
+</html>

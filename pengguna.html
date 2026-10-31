@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Kelola Pengguna – Sistem Material PT Kinarya Utama Teknik">
+    <title>Kelola Pengguna – Sistem Material</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+
+<body>
+    <div class="app-layout" id="app">
+        <div class="main-content">
+            <header class="top-header" id="topHeader"></header>
+            <div class="page-content">
+
+                <!-- Action Bar -->
+                <div class="d-flex justify-between align-center mb-2">
+                    <div>
+                        <span class="text-sm text-muted" id="countInfo"></span>
+                    </div>
+                    <button class="btn btn-primary" onclick="openAddPengguna()">＋ Tambah Pengguna</button>
+                </div>
+
+                <!-- Table -->
+                <div class="card">
+                    <div class="card-body" style="padding:0;">
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>No</th>
+                                        <th>Nama</th>
+                                        <th>Username</th>
+                                        <th>Peran</th>
+                                        <th>Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tblPengguna"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Tambah/Edit Pengguna -->
+    <div class="modal-overlay" id="modalPengguna">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modalTitle">Tambah Pengguna</h3>
+                <button class="modal-close" onclick="UI.closeModal('modalPengguna')">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="formPengguna" onsubmit="savePengguna(event)">
+                    <input type="hidden" id="editId">
+                    <div class="form-group">
+                        <label>Nama Lengkap <span class="required">*</span></label>
+                        <input type="text" class="form-control" id="fNama" required maxlength="100"
+                            placeholder="Nama lengkap pengguna">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Username <span class="required">*</span></label>
+                            <input type="text" class="form-control" id="fUsername" required maxlength="50"
+                                placeholder="Username untuk login" autocomplete="off">
+                        </div>
+                        <div class="form-group">
+                            <label>Peran <span class="required">*</span></label>
+                            <select class="form-control" id="fRole" required>
+                                <option value="">-- Pilih Peran --</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group" id="passwordGroup">
+                        <label>Password <span class="required" id="pwdRequired">*</span></label>
+                        <input type="password" class="form-control" id="fPassword" minlength="6"
+                            placeholder="Minimal 6 karakter" autocomplete="new-password">
+                        <span class="form-hint" id="pwdHint">Wajib diisi untuk pengguna baru.</span>
+                    </div>
+                    <div class="modal-footer" style="padding:16px 0 0;border-top:1px solid var(--gray-100);">
+                        <button type="button" class="btn btn-outline"
+                            onclick="UI.closeModal('modalPengguna')">Batal</button>
+                        <button type="submit" class="btn btn-primary">Simpan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="assets/js/data.js"></script>
+    <script src="assets/js/auth.js"></script>
+    <script src="assets/js/components.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!Auth.requireRole(['Kepala Operasional'])) return;
+            if (!UI.init('pengguna')) return;
+            renderPengguna();
+        });
+
+        function renderPengguna() {
+            const currentUser = Auth.getUser();
+            const users = MockDB.pengguna;
+            document.getElementById('countInfo').textContent = `${users.length} pengguna terdaftar`;
+
+            let html = '';
+            users.forEach((u, i) => {
+                const isSelf = u.id_pengguna === currentUser.id_pengguna;
+                html += `
+                    <tr>
+                        <td>${i + 1}</td>
+                        <td>
+                            <div class="d-flex align-center gap-1">
+                                <div class="avatar" style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--navy-500),var(--navy-400));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:.7rem;flex-shrink:0;">
+                                    ${u.nama.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase()}
+                                </div>
+                                <div>
+                                    <strong>${u.nama}</strong>
+                                    ${isSelf ? '<span class="text-xs text-muted"> (Anda)</span>' : ''}
+                                </div>
+                            </div>
+                        </td>
+                        <td><span class="kode-material">${u.username}</span></td>
+                        <td>${UI.renderRoleBadge(u.role)}</td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="btn btn-sm btn-outline" onclick="openEditPengguna(${u.id_pengguna})" title="Ubah">✏️</button>
+                                ${isSelf
+                        ? `<button class="btn btn-sm btn-outline" disabled title="Tidak dapat menghapus akun sendiri">🗑️</button>`
+                        : `<button class="btn btn-sm btn-danger" onclick="deletePengguna(${u.id_pengguna})" title="Hapus">🗑️</button>`
+                    }
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            document.getElementById('tblPengguna').innerHTML = html;
+        }
+
+        function openAddPengguna() {
+            document.getElementById('modalTitle').textContent = 'Tambah Pengguna';
+            document.getElementById('editId').value = '';
+            document.getElementById('fNama').value = '';
+            document.getElementById('fUsername').value = '';
+            document.getElementById('fUsername').disabled = false;
+            document.getElementById('fRole').innerHTML = '<option value="">-- Pilih Peran --</option>' + UI.renderRoleOptions();
+            document.getElementById('fPassword').value = '';
+            document.getElementById('fPassword').required = true;
+            document.getElementById('pwdRequired').style.display = '';
+            document.getElementById('pwdHint').textContent = 'Wajib diisi untuk pengguna baru. Minimal 6 karakter.';
+            UI.openModal('modalPengguna');
+        }
+
+        function openEditPengguna(id) {
+            const u = getPenggunaById(id);
+            if (!u) return;
+
+            document.getElementById('modalTitle').textContent = 'Ubah Pengguna';
+            document.getElementById('editId').value = id;
+            document.getElementById('fNama').value = u.nama;
+            document.getElementById('fUsername').value = u.username;
+            document.getElementById('fUsername').disabled = true; // Username cannot be changed
+            document.getElementById('fRole').innerHTML = '<option value="">-- Pilih Peran --</option>' + UI.renderRoleOptions(u.role);
+            document.getElementById('fPassword').value = '';
+            document.getElementById('fPassword').required = false;
+            document.getElementById('pwdRequired').style.display = 'none';
+            document.getElementById('pwdHint').textContent = 'Kosongkan jika tidak ingin mengubah password.';
+            UI.openModal('modalPengguna');
+        }
+
+        function savePengguna(e) {
+            e.preventDefault();
+            const editId = document.getElementById('editId').value;
+            const nama = document.getElementById('fNama').value.trim();
+            const username = document.getElementById('fUsername').value.trim().toLowerCase();
+            const role = document.getElementById('fRole').value;
+            const password = document.getElementById('fPassword').value;
+
+            if (!nama || !username || !role) {
+                UI.showToast('Harap lengkapi semua field yang wajib diisi.', 'error');
+                return;
+            }
+
+            if (!editId && !password) {
+                UI.showToast('Password wajib diisi untuk pengguna baru.', 'error');
+                return;
+            }
+
+            if (password && password.length < 6) {
+                UI.showToast('Password minimal 6 karakter.', 'error');
+                return;
+            }
+
+            // Check unique username
+            const existing = MockDB.pengguna.find(u => u.username === username && u.id_pengguna !== parseInt(editId));
+            if (existing) {
+                UI.showToast('Username "' + username + '" sudah digunakan. Pilih username lain.', 'error');
+                return;
+            }
+
+            if (editId) {
+                // Update
+                const u = getPenggunaById(parseInt(editId));
+                if (u) {
+                    u.nama = nama;
+                    u.role = role;
+                    if (password) u.password = password;
+
+                    // Update session if editing self
+                    const currentUser = Auth.getUser();
+                    if (u.id_pengguna === currentUser.id_pengguna) {
+                        const session = {
+                            id_pengguna: u.id_pengguna,
+                            nama: u.nama,
+                            username: u.username,
+                            role: u.role,
+                            login_at: currentUser.login_at
+                        };
+                        sessionStorage.setItem(Auth.SESSION_KEY, JSON.stringify(session));
+                    }
+
+                    UI.showToast('Pengguna berhasil diperbarui.', 'success');
+                }
+            } else {
+                // Add
+                MockDB.pengguna.push({
+                    id_pengguna: MockDB.getNextId('pengguna'),
+                    nama: nama,
+                    username: username,
+                    password: password,
+                    role: role
+                });
+                UI.showToast('Pengguna baru berhasil ditambahkan.', 'success');
+            }
+
+            UI.closeModal('modalPengguna');
+            renderPengguna();
+        }
+
+        function deletePengguna(id) {
+            const u = getPenggunaById(id);
+            if (!u) return;
+
+            const currentUser = Auth.getUser();
+            if (u.id_pengguna === currentUser.id_pengguna) {
+                UI.showToast('Anda tidak dapat menghapus akun sendiri.', 'error');
+                return;
+            }
+
+            // Check if user has transactions
+            const hasMasuk = MockDB.material_masuk.some(m => m.id_pengguna === id);
+            const hasKeluar = MockDB.material_keluar.some(k => k.id_pengguna === id || k.id_admin === id);
+            if (hasMasuk || hasKeluar) {
+                UI.showToast('Pengguna ini memiliki riwayat transaksi dan tidak dapat dihapus. Pertimbangkan untuk mengubah perannya saja.', 'error');
+                return;
+            }
+
+            if (!UI.confirm(`Hapus pengguna "${u.nama}" (${u.username})?`)) return;
+
+            MockDB.pengguna = MockDB.pengguna.filter(p => p.id_pengguna !== id);
+            UI.showToast('Pengguna berhasil dihapus.', 'success');
+            renderPengguna();
+        }
+    </script>
+</body>
+
+</html>

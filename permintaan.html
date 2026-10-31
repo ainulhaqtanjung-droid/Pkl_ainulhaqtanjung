@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Permintaan Material – Sistem Material PT Kinarya Utama Teknik">
+    <title>Permintaan Material – Sistem Material</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+    <div class="app-layout" id="app">
+        <div class="main-content">
+            <header class="top-header" id="topHeader"></header>
+            <div class="page-content">
+
+                <!-- Form Ajukan Permintaan (Tim Lapangan) -->
+                <div class="card mb-3" id="sectionAjukan" style="display:none;">
+                    <div class="card-header">
+                        <h3>📤 Ajukan Permintaan Material</h3>
+                    </div>
+                    <div class="card-body">
+                        <form id="formPermintaan" onsubmit="ajukanPermintaan(event)">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Material <span class="required">*</span></label>
+                                    <select class="form-control" id="fMaterial" required onchange="updateInfo()">
+                                        <option value="">-- Pilih Material --</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Jumlah <span class="required">*</span></label>
+                                    <div class="d-flex gap-1 align-center">
+                                        <input type="number" class="form-control" id="fJumlah" min="1" required placeholder="0">
+                                        <span id="lblSatuan" class="text-muted text-sm" style="min-width:50px;"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Nama Pengambil <span class="required">*</span></label>
+                                    <input type="text" class="form-control" id="fPengambil" required maxlength="100" placeholder="Nama orang yang akan mengambil">
+                                </div>
+                                <div class="form-group">
+                                    <label>Tanggal <span class="required">*</span></label>
+                                    <input type="date" class="form-control" id="fTanggal" required>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Keperluan <span class="required">*</span></label>
+                                <input type="text" class="form-control" id="fKeperluan" required maxlength="255" placeholder="Contoh: Penarikan FO ke site Medan Baru">
+                            </div>
+                            <div class="d-flex justify-between align-center mt-1">
+                                <span class="text-sm text-muted" id="infoStok"></span>
+                                <button type="submit" class="btn btn-primary">📤 Ajukan Permintaan</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Filter for Admin -->
+                <div class="filters-bar no-print" id="filterBar" style="display:none;">
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select class="form-control" id="filterStatus" onchange="renderPermintaan()">
+                            <option value="">Semua Status</option>
+                            <option value="Menunggu" selected>Menunggu</option>
+                            <option value="Disetujui">Disetujui</option>
+                            <option value="Ditolak">Ditolak</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Material</label>
+                        <select class="form-control" id="filterMaterial" onchange="renderPermintaan()">
+                            <option value="">Semua Material</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Table Permintaan -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 id="tblTitle">📋 Daftar Permintaan</h3>
+                        <span class="text-sm text-muted" id="countInfo"></span>
+                    </div>
+                    <div class="card-body" style="padding:0;">
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>No</th>
+                                        <th>Tanggal</th>
+                                        <th>Material</th>
+                                        <th>Jumlah</th>
+                                        <th>Pengambil</th>
+                                        <th>Keperluan</th>
+                                        <th>Status</th>
+                                        <th id="thAksi">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tblPermintaan"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="assets/js/data.js"></script>
+    <script src="assets/js/auth.js"></script>
+    <script src="assets/js/components.js"></script>
+    <script>
+        let currentRole = '';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!Auth.requireRole(['Admin', 'Tim Lapangan'])) return;
+            if (!UI.init('permintaan')) return;
+
+            const user = Auth.getUser();
+            currentRole = user.role;
+
+            if (currentRole === 'Tim Lapangan') {
+                // Show form, hide filter
+                document.getElementById('sectionAjukan').style.display = '';
+                document.getElementById('fTanggal').value = new Date().toISOString().split('T')[0];
+                document.getElementById('fPengambil').value = user.nama;
+                document.getElementById('fMaterial').innerHTML =
+                    '<option value="">-- Pilih Material --</option>' + UI.renderMaterialOptions();
+                document.getElementById('thAksi').style.display = 'none';
+                document.getElementById('tblTitle').textContent = '📋 Permintaan Saya';
+            } else {
+                // Admin: show filter
+                document.getElementById('filterBar').style.display = '';
+                document.getElementById('filterMaterial').innerHTML =
+                    '<option value="">Semua Material</option>' +
+                    MockDB.material.map(m => `<option value="${m.id_material}">${m.nama_material}</option>`).join('');
+            }
+
+            renderPermintaan();
+        });
+
+        function updateInfo() {
+            const id = parseInt(document.getElementById('fMaterial').value);
+            const mat = getMaterialById(id);
+            if (mat) {
+                document.getElementById('lblSatuan').textContent = mat.satuan;
+                document.getElementById('infoStok').textContent = `Stok tersedia: ${formatAngka(mat.stok)} ${mat.satuan}`;
+            } else {
+                document.getElementById('lblSatuan').textContent = '';
+                document.getElementById('infoStok').textContent = '';
+            }
+        }
+
+        function ajukanPermintaan(e) {
+            e.preventDefault();
+            const user = Auth.getUser();
+            const idMaterial = parseInt(document.getElementById('fMaterial').value);
+            const jumlah = parseInt(document.getElementById('fJumlah').value);
+            const pengambil = document.getElementById('fPengambil').value.trim();
+            const tanggal = document.getElementById('fTanggal').value;
+            const keperluan = document.getElementById('fKeperluan').value.trim();
+
+            if (!idMaterial || !jumlah || !pengambil || !tanggal || !keperluan) {
+                UI.showToast('Harap lengkapi semua field yang wajib diisi.', 'error');
+                return;
+            }
+
+            if (jumlah <= 0) {
+                UI.showToast('Jumlah harus lebih dari 0.', 'error');
+                return;
+            }
+
+            // Stok TIDAK berkurang saat mengajukan
+            MockDB.material_keluar.push({
+                id_keluar: MockDB.getNextId('material_keluar'),
+                id_material: idMaterial,
+                id_pengguna: user.id_pengguna,
+                nama_pengambil: pengambil,
+                tanggal: tanggal,
+                jumlah: jumlah,
+                keperluan: keperluan,
+                status: 'Menunggu',
+                id_admin: null,
+                tgl_acc: null
+            });
+
+            const mat = getMaterialById(idMaterial);
+            UI.showToast(`Permintaan ${mat.nama_material} sebanyak ${formatAngka(jumlah)} ${mat.satuan} berhasil diajukan. Menunggu persetujuan Admin.`, 'success');
+
+            // Reset form
+            document.getElementById('formPermintaan').reset();
+            document.getElementById('fTanggal').value = new Date().toISOString().split('T')[0];
+            document.getElementById('fPengambil').value = user.nama;
+            document.getElementById('lblSatuan').textContent = '';
+            document.getElementById('infoStok').textContent = '';
+            document.getElementById('fMaterial').innerHTML =
+                '<option value="">-- Pilih Material --</option>' + UI.renderMaterialOptions();
+
+            renderPermintaan();
+        }
+
+        function renderPermintaan() {
+            const user = Auth.getUser();
+            let data = [...MockDB.material_keluar];
+
+            // Tim Lapangan: only own requests
+            if (currentRole === 'Tim Lapangan') {
+                data = data.filter(k => k.id_pengguna === user.id_pengguna);
+            }
+
+            // Admin: apply filters
+            if (currentRole === 'Admin') {
+                const fStatus = document.getElementById('filterStatus').value;
+                const fMaterial = document.getElementById('filterMaterial').value;
+                if (fStatus) data = data.filter(k => k.status === fStatus);
+                if (fMaterial) data = data.filter(k => k.id_material === parseInt(fMaterial));
+            }
+
+            // Sort by date desc
+            data.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal));
+
+            // Count info
+            document.getElementById('countInfo').textContent = `${data.length} permintaan`;
+
+            let html = '';
+            if (data.length === 0) {
+                const colspan = currentRole === 'Tim Lapangan' ? 7 : 8;
+                html = `<tr><td colspan="${colspan}" class="text-center text-muted" style="padding:32px;">Tidak ada permintaan ditemukan</td></tr>`;
+            } else {
+                data.forEach((k, i) => {
+                    const mat = getMaterialById(k.id_material);
+                    const hideAksi = currentRole === 'Tim Lapangan' ? 'style="display:none;"' : '';
+
+                    let aksiHtml = '';
+                    if (currentRole === 'Admin' && k.status === 'Menunggu') {
+                        aksiHtml = `
+                            <div class="action-buttons">
+                                <button class="btn btn-sm btn-success" onclick="accPermintaan(${k.id_keluar})" title="Setujui">✓ ACC</button>
+                                <button class="btn btn-sm btn-danger" onclick="tolakPermintaan(${k.id_keluar})" title="Tolak">✕ Tolak</button>
+                            </div>
+                        `;
+                    } else if (k.status !== 'Menunggu') {
+                        const adminName = k.id_admin ? getNamaPengguna(k.id_admin) : '-';
+                        aksiHtml = `<span class="text-xs text-muted">${adminName}<br>${formatTanggalWaktu(k.tgl_acc)}</span>`;
+                    }
+
+                    html += `
+                        <tr>
+                            <td>${i + 1}</td>
+                            <td>${formatTanggal(k.tanggal)}</td>
+                            <td>
+                                <span class="kode-material">${mat ? mat.kode_material : '-'}</span><br>
+                                <span class="text-sm">${mat ? mat.nama_material : '-'}</span>
+                            </td>
+                            <td><strong>${formatAngka(k.jumlah)}</strong> ${mat ? mat.satuan : ''}</td>
+                            <td>${k.nama_pengambil}</td>
+                            <td>${k.keperluan}</td>
+                            <td>${UI.renderStatusBadge(k.status)}</td>
+                            <td ${hideAksi}>${aksiHtml}</td>
+                        </tr>
+                    `;
+                });
+            }
+
+            document.getElementById('tblPermintaan').innerHTML = html;
+        }
+
+        function accPermintaan(idKeluar) {
+            const req = MockDB.material_keluar.find(k => k.id_keluar === idKeluar);
+            if (!req) return;
+
+            const mat = getMaterialById(req.id_material);
+            if (!mat) return;
+
+            // Cek stok
+            if (req.jumlah > mat.stok) {
+                UI.showToast(
+                    `Stok ${mat.nama_material} tidak mencukupi! ` +
+                    `Diminta: ${formatAngka(req.jumlah)} ${mat.satuan}, ` +
+                    `Tersedia: ${formatAngka(mat.stok)} ${mat.satuan}. ` +
+                    `Tambahkan stok melalui Material Masuk terlebih dahulu, atau tolak permintaan ini.`,
+                    'error', 6000
+                );
+                return;
+            }
+
+            if (!UI.confirm(
+                `Setujui permintaan ${mat.nama_material} sebanyak ${formatAngka(req.jumlah)} ${mat.satuan}?\n` +
+                `Stok akan berkurang dari ${formatAngka(mat.stok)} menjadi ${formatAngka(mat.stok - req.jumlah)} ${mat.satuan}.`
+            )) return;
+
+            const user = Auth.getUser();
+
+            // Simulasi database transaction: update stok + status bersamaan
+            mat.stok -= req.jumlah;
+            req.status = 'Disetujui';
+            req.id_admin = user.id_pengguna;
+            req.tgl_acc = new Date().toISOString().replace('T', ' ').substring(0, 19);
+
+            UI.showToast(
+                `Permintaan disetujui. Stok ${mat.nama_material} berkurang ${formatAngka(req.jumlah)} ${mat.satuan}. Sisa: ${formatAngka(mat.stok)} ${mat.satuan}.`,
+                'success', 5000
+            );
+
+            renderPermintaan();
+        }
+
+        function tolakPermintaan(idKeluar) {
+            const req = MockDB.material_keluar.find(k => k.id_keluar === idKeluar);
+            if (!req) return;
+
+            const mat = getMaterialById(req.id_material);
+
+            if (!UI.confirm(`Tolak permintaan ${mat ? mat.nama_material : ''} dari ${req.nama_pengambil}?`)) return;
+
+            const user = Auth.getUser();
+
+            // Stok TIDAK berubah saat ditolak
+            req.status = 'Ditolak';
+            req.id_admin = user.id_pengguna;
+            req.tgl_acc = new Date().toISOString().replace('T', ' ').substring(0, 19);
+
+            UI.showToast('Permintaan ditolak. Stok tidak berubah.', 'warning');
+            renderPermintaan();
+        }
+    </script>
+</body>
+</html>

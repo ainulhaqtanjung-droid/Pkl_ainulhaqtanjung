@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Login Sistem Material PT Kinarya Utama Teknik Regional Sumbagut">
+    <title>Login – Sistem Material PT Kinarya Utama Teknik</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+    <div class="login-wrapper">
+        <div class="login-card">
+            <div class="login-logo">
+                <div class="icon">📦</div>
+                <h1>Sistem Material</h1>
+                <p class="subtitle">PT Kinarya Utama Teknik · Regional Sumbagut</p>
+            </div>
+
+            <div class="login-error" id="loginError"></div>
+
+            <form class="login-form" id="loginForm" onsubmit="handleLogin(event)">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" placeholder="Masukkan username" autocomplete="username" required autofocus>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <div class="password-input-wrapper">
+                        <input type="password" id="password" placeholder="Masukkan password" autocomplete="current-password" required>
+                        <button type="button" class="toggle-password-btn" id="togglePasswordBtn" onclick="togglePasswordVisibility()" title="Tampilkan/Sembunyikan Password" tabindex="-1">
+                            <span id="eyeIcon">👁️</span>
+                        </button>
+                    </div>
+                </div>
+                <button type="submit" class="login-btn" id="loginBtn">
+                    Masuk ke Sistem
+                </button>
+            </form>
+
+            <div class="login-demo-info">
+                <div class="demo-header">
+                    <span>PILIH AKUN LOGIN CEPAT</span>
+                </div>
+                <div class="demo-accounts">
+                    <button type="button" class="demo-account" onclick="fillDemo('admin','admin123')">
+                        <span class="role-badge badge-admin">Admin</span>
+                        <span class="account-cred">admin / admin123</span>
+                    </button>
+                    <button type="button" class="demo-account" onclick="fillDemo('petugas','petugas123')">
+                        <span class="role-badge badge-lapangan">Petugas Lapangan</span>
+                        <span class="account-cred">petugas / petugas123</span>
+                    </button>
+                    <button type="button" class="demo-account" onclick="fillDemo('kepala','kepala123')">
+                        <span class="role-badge badge-kepala">Kepala Operasional</span>
+                        <span class="account-cred">kepala / kepala123</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="assets/js/data.js?v=2"></script>
+    <script src="assets/js/auth.js?v=2"></script>
+    <script>
+        // Redirect if already logged in
+        if (Auth.isLoggedIn()) {
+            window.location.href = 'dashboard.html';
+        }
+
+        function togglePasswordVisibility() {
+            const pwdInput = document.getElementById('password');
+            const eyeIcon = document.getElementById('eyeIcon');
+            if (pwdInput.type === 'password') {
+                pwdInput.type = 'text';
+                eyeIcon.textContent = '🔒';
+            } else {
+                pwdInput.type = 'password';
+                eyeIcon.textContent = '👁️';
+            }
+        }
+
+        function fillDemo(user, pass) {
+            document.getElementById('username').value = user;
+            document.getElementById('password').value = pass;
+            const errorEl = document.getElementById('loginError');
+            errorEl.classList.remove('show');
+            document.getElementById('loginBtn').focus();
+        }
+
+        function handleLogin(e) {
+            e.preventDefault();
+            const errorEl = document.getElementById('loginError');
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+
+            if (!username || !password) {
+                errorEl.textContent = 'Harap isi username dan password.';
+                errorEl.classList.add('show');
+                return;
+            }
+
+            const result = Auth.login(username, password);
+
+            if (!result.success) {
+                errorEl.textContent = result.message;
+                errorEl.classList.add('show');
+                document.getElementById('password').value = '';
+                document.getElementById('password').focus();
+                return;
+            }
+
+            errorEl.classList.remove('show');
+            window.location.href = 'dashboard.html';
+        }
+    </script>
+</body>
+</html>

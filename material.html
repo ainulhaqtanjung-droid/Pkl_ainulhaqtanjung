@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Data Material – Sistem Material PT Kinarya Utama Teknik">
+    <title>Data Material – Sistem Material</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+    <div class="app-layout" id="app">
+        <div class="main-content">
+            <header class="top-header" id="topHeader"></header>
+            <div class="page-content">
+
+                <!-- Action bar -->
+                <div class="d-flex justify-between align-center mb-2 no-print" id="actionBar">
+                    <div>
+                        <input type="text" class="form-control" id="searchMaterial" placeholder="🔍 Cari material..." style="width:300px;max-width:100%;" oninput="renderMaterialTable()">
+                    </div>
+                    <button class="btn btn-primary" onclick="openAddMaterial()" id="btnTambah">
+                        ＋ Tambah Material
+                    </button>
+                </div>
+
+                <!-- Table -->
+                <div class="card">
+                    <div class="card-body" style="padding:0;">
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>No</th>
+                                        <th>Kode</th>
+                                        <th>Nama Material</th>
+                                        <th>Satuan</th>
+                                        <th>Stok</th>
+                                        <th id="thAksi">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tblMaterial"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Tambah/Edit Material -->
+    <div class="modal-overlay" id="modalMaterial">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modalMaterialTitle">Tambah Material</h3>
+                <button class="modal-close" onclick="UI.closeModal('modalMaterial')">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="formMaterial" onsubmit="saveMaterial(event)">
+                    <input type="hidden" id="editId">
+                    <div class="form-group">
+                        <label>Kode Material <span class="required">*</span></label>
+                        <input type="text" class="form-control" id="fKode" placeholder="Contoh: KBL-FO-003" required maxlength="20">
+                        <span class="form-hint">Format: 3 huruf - 2 huruf - 3 angka (contoh: KBL-FO-003)</span>
+                    </div>
+                    <div class="form-group">
+                        <label>Nama Material <span class="required">*</span></label>
+                        <input type="text" class="form-control" id="fNama" placeholder="Nama lengkap material" required maxlength="100">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Satuan <span class="required">*</span></label>
+                            <select class="form-control" id="fSatuan" required>
+                                <option value="">-- Pilih Satuan --</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Stok Awal</label>
+                            <input type="number" class="form-control" id="fStok" value="0" min="0">
+                            <span class="form-hint">Isi 0 jika stok akan ditambah lewat Material Masuk</span>
+                        </div>
+                    </div>
+                    <div class="modal-footer" style="padding:16px 0 0;border-top:1px solid var(--gray-100);">
+                        <button type="button" class="btn btn-outline" onclick="UI.closeModal('modalMaterial')">Batal</button>
+                        <button type="submit" class="btn btn-primary">Simpan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="assets/js/data.js"></script>
+    <script src="assets/js/auth.js"></script>
+    <script src="assets/js/components.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!Auth.requireRole(['Kepala Operasional', 'Admin'])) return;
+            if (!UI.init('material')) return;
+
+            // Kepala Operasional: read-only (no add/edit/delete)
+            const user = Auth.getUser();
+            if (user.role === 'Kepala Operasional') {
+                document.getElementById('btnTambah').style.display = 'none';
+                document.getElementById('thAksi').style.display = 'none';
+            }
+
+            renderMaterialTable();
+        });
+
+        function renderMaterialTable() {
+            const user = Auth.getUser();
+            const search = (document.getElementById('searchMaterial').value || '').toLowerCase();
+            const filtered = MockDB.material.filter(m =>
+                m.kode_material.toLowerCase().includes(search) ||
+                m.nama_material.toLowerCase().includes(search) ||
+                m.satuan.toLowerCase().includes(search)
+            );
+
+            let html = '';
+            if (filtered.length === 0) {
+                html = `<tr><td colspan="6" class="text-center text-muted" style="padding:32px;">Tidak ada material ditemukan</td></tr>`;
+            } else {
+                filtered.forEach((m, i) => {
+                    const hideAksi = user.role === 'Kepala Operasional' ? 'style="display:none;"' : '';
+                    const hasTransaksi = materialPunyaTransaksi(m.id_material);
+                    const deleteBtn = hasTransaksi
+                        ? `<button class="btn btn-sm btn-outline" disabled title="Material memiliki riwayat transaksi, tidak dapat dihapus">🗑️</button>`
+                        : `<button class="btn btn-sm btn-danger" onclick="deleteMaterial(${m.id_material})" title="Hapus">🗑️</button>`;
+
+                    html += `
+                        <tr>
+                            <td>${i + 1}</td>
+                            <td><span class="kode-material">${m.kode_material}</span></td>
+                            <td>${m.nama_material}</td>
+                            <td>${m.satuan}</td>
+                            <td>${UI.renderStok(m)}</td>
+                            <td ${hideAksi}>
+                                <div class="action-buttons">
+                                    <button class="btn btn-sm btn-outline" onclick="openEditMaterial(${m.id_material})" title="Ubah">✏️</button>
+                                    ${deleteBtn}
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+            }
+
+            document.getElementById('tblMaterial').innerHTML = html;
+        }
+
+        function openAddMaterial() {
+            document.getElementById('modalMaterialTitle').textContent = 'Tambah Material';
+            document.getElementById('editId').value = '';
+            document.getElementById('fKode').value = '';
+            document.getElementById('fNama').value = '';
+            document.getElementById('fSatuan').innerHTML = '<option value="">-- Pilih Satuan --</option>' + UI.renderSatuanOptions();
+            document.getElementById('fStok').value = 0;
+            document.getElementById('fStok').parentElement.style.display = '';
+            UI.openModal('modalMaterial');
+        }
+
+        function openEditMaterial(id) {
+            const m = getMaterialById(id);
+            if (!m) return;
+
+            document.getElementById('modalMaterialTitle').textContent = 'Ubah Material';
+            document.getElementById('editId').value = id;
+            document.getElementById('fKode').value = m.kode_material;
+            document.getElementById('fNama').value = m.nama_material;
+            document.getElementById('fSatuan').innerHTML = '<option value="">-- Pilih Satuan --</option>' + UI.renderSatuanOptions(m.satuan);
+            document.getElementById('fStok').value = m.stok;
+            document.getElementById('fStok').parentElement.style.display = 'none'; // Stok diubah lewat material masuk
+            UI.openModal('modalMaterial');
+        }
+
+        function saveMaterial(e) {
+            e.preventDefault();
+            const editId = document.getElementById('editId').value;
+            const kode = document.getElementById('fKode').value.trim().toUpperCase();
+            const nama = document.getElementById('fNama').value.trim();
+            const satuan = document.getElementById('fSatuan').value;
+            const stok = parseInt(document.getElementById('fStok').value) || 0;
+
+            if (!kode || !nama || !satuan) {
+                UI.showToast('Harap lengkapi semua field yang wajib diisi.', 'error');
+                return;
+            }
+
+            // Check unique kode
+            const existing = MockDB.material.find(m => m.kode_material === kode && m.id_material !== parseInt(editId));
+            if (existing) {
+                UI.showToast('Kode material "' + kode + '" sudah digunakan. Gunakan kode lain.', 'error');
+                return;
+            }
+
+            if (editId) {
+                // Update
+                const m = getMaterialById(parseInt(editId));
+                if (m) {
+                    m.kode_material = kode;
+                    m.nama_material = nama;
+                    m.satuan = satuan;
+                    UI.showToast('Material berhasil diperbarui.', 'success');
+                }
+            } else {
+                // Add
+                MockDB.material.push({
+                    id_material: MockDB.getNextId('material'),
+                    kode_material: kode,
+                    nama_material: nama,
+                    satuan: satuan,
+                    stok: stok
+                });
+                UI.showToast('Material baru berhasil ditambahkan.', 'success');
+            }
+
+            UI.closeModal('modalMaterial');
+            renderMaterialTable();
+        }
+
+        function deleteMaterial(id) {
+            if (materialPunyaTransaksi(id)) {
+                UI.showToast('Material ini memiliki riwayat transaksi dan tidak dapat dihapus. Hubungi Kepala Operasional jika perlu menonaktifkan material.', 'error');
+                return;
+            }
+
+            if (!UI.confirm('Apakah Anda yakin ingin menghapus material ini?')) return;
+
+            MockDB.material = MockDB.material.filter(m => m.id_material !== id);
+            UI.showToast('Material berhasil dihapus.', 'success');
+            renderMaterialTable();
+        }
+    </script>
+</body>
+</html>

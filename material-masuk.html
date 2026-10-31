@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Material Masuk – Sistem Material PT Kinarya Utama Teknik">
+    <title>Material Masuk – Sistem Material</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+    <div class="app-layout" id="app">
+        <div class="main-content">
+            <header class="top-header" id="topHeader"></header>
+            <div class="page-content">
+
+                <!-- Form Catat Material Masuk -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h3>📥 Catat Material Masuk</h3>
+                    </div>
+                    <div class="card-body">
+                        <form id="formMasuk" onsubmit="simpanMasuk(event)">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Material <span class="required">*</span></label>
+                                    <select class="form-control" id="fMaterial" required onchange="updateSatuan()">
+                                        <option value="">-- Pilih Material --</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Jumlah <span class="required">*</span></label>
+                                    <div class="d-flex gap-1 align-center">
+                                        <input type="number" class="form-control" id="fJumlah" min="1" required placeholder="0">
+                                        <span id="lblSatuan" class="text-muted text-sm" style="min-width:50px;"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Tanggal <span class="required">*</span></label>
+                                    <input type="date" class="form-control" id="fTanggal" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Asal / Keterangan <span class="required">*</span></label>
+                                    <input type="text" class="form-control" id="fKeterangan" placeholder="Contoh: Pengadaan dari vendor PT ABC" required maxlength="255">
+                                </div>
+                            </div>
+                            <div class="d-flex justify-between align-center mt-1">
+                                <span class="text-sm text-muted" id="infoStok"></span>
+                                <button type="submit" class="btn btn-primary">📥 Simpan Material Masuk</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Riwayat Material Masuk -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3>📋 Riwayat Material Masuk Terbaru</h3>
+                    </div>
+                    <div class="card-body" style="padding:0;">
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>No</th>
+                                        <th>Tanggal</th>
+                                        <th>Kode</th>
+                                        <th>Material</th>
+                                        <th>Jumlah</th>
+                                        <th>Asal / Keterangan</th>
+                                        <th>Dicatat Oleh</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tblMasuk"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="assets/js/data.js"></script>
+    <script src="assets/js/auth.js"></script>
+    <script src="assets/js/components.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!Auth.requireRole(['Admin'])) return;
+            if (!UI.init('masuk')) return;
+
+            // Set default date to today
+            document.getElementById('fTanggal').value = new Date().toISOString().split('T')[0];
+
+            // Populate material options
+            document.getElementById('fMaterial').innerHTML =
+                '<option value="">-- Pilih Material --</option>' + UI.renderMaterialOptions();
+
+            renderRiwayatMasuk();
+        });
+
+        function updateSatuan() {
+            const id = parseInt(document.getElementById('fMaterial').value);
+            const mat = getMaterialById(id);
+            if (mat) {
+                document.getElementById('lblSatuan').textContent = mat.satuan;
+                document.getElementById('infoStok').textContent = `Stok saat ini: ${formatAngka(mat.stok)} ${mat.satuan}`;
+            } else {
+                document.getElementById('lblSatuan').textContent = '';
+                document.getElementById('infoStok').textContent = '';
+            }
+        }
+
+        function simpanMasuk(e) {
+            e.preventDefault();
+            const user = Auth.getUser();
+            const idMaterial = parseInt(document.getElementById('fMaterial').value);
+            const jumlah = parseInt(document.getElementById('fJumlah').value);
+            const tanggal = document.getElementById('fTanggal').value;
+            const keterangan = document.getElementById('fKeterangan').value.trim();
+
+            if (!idMaterial || !jumlah || !tanggal || !keterangan) {
+                UI.showToast('Harap lengkapi semua field yang wajib diisi.', 'error');
+                return;
+            }
+
+            if (jumlah <= 0) {
+                UI.showToast('Jumlah harus lebih dari 0.', 'error');
+                return;
+            }
+
+            // Add material masuk record
+            MockDB.material_masuk.push({
+                id_masuk: MockDB.getNextId('material_masuk'),
+                id_material: idMaterial,
+                id_pengguna: user.id_pengguna,
+                tanggal: tanggal,
+                jumlah: jumlah,
+                keterangan: keterangan
+            });
+
+            // Update stok
+            const mat = getMaterialById(idMaterial);
+            if (mat) {
+                mat.stok += jumlah;
+            }
+
+            UI.showToast(`Material masuk berhasil dicatat. Stok ${mat.nama_material} bertambah ${formatAngka(jumlah)} ${mat.satuan}.`, 'success');
+
+            // Reset form
+            document.getElementById('formMasuk').reset();
+            document.getElementById('fTanggal').value = new Date().toISOString().split('T')[0];
+            document.getElementById('lblSatuan').textContent = '';
+            document.getElementById('infoStok').textContent = '';
+
+            // Refresh material options (stok updated)
+            document.getElementById('fMaterial').innerHTML =
+                '<option value="">-- Pilih Material --</option>' + UI.renderMaterialOptions();
+
+            renderRiwayatMasuk();
+        }
+
+        function renderRiwayatMasuk() {
+            // Sort by date desc, then by id desc
+            const sorted = [...MockDB.material_masuk].sort((a, b) => {
+                const dateDiff = new Date(b.tanggal) - new Date(a.tanggal);
+                return dateDiff !== 0 ? dateDiff : b.id_masuk - a.id_masuk;
+            });
+
+            let html = '';
+            if (sorted.length === 0) {
+                html = `<tr><td colspan="7" class="text-center text-muted" style="padding:32px;">Belum ada data material masuk</td></tr>`;
+            } else {
+                sorted.forEach((m, i) => {
+                    const mat = getMaterialById(m.id_material);
+                    html += `
+                        <tr class="${i === 0 && MockDB.material_masuk.length > 14 ? 'highlight-row' : ''}">
+                            <td>${i + 1}</td>
+                            <td>${formatTanggal(m.tanggal)}</td>
+                            <td><span class="kode-material">${mat ? mat.kode_material : '-'}</span></td>
+                            <td>${mat ? mat.nama_material : '-'}</td>
+                            <td><strong>${formatAngka(m.jumlah)}</strong> ${mat ? mat.satuan : ''}</td>
+                            <td>${m.keterangan || '-'}</td>
+                            <td>${getNamaPengguna(m.id_pengguna)}</td>
+                        </tr>
+                    `;
+                });
+            }
+
+            document.getElementById('tblMasuk').innerHTML = html;
+        }
+    </script>
+</body>
+</html>
